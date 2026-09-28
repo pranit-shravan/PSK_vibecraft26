@@ -1,0 +1,706 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Attendance Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f1f5f9;
+        }
+        /* Custom animations for alerts and uploads */
+        @keyframes pulse-red {
+            0%, 100% { background-color: #ef4444; border-color: #dc2626; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+            50% { background-color: #f87171; border-color: #ef4444; box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+        }
+        .alert-irreversible {
+            animation: pulse-red 2s infinite;
+        }
+        .spin {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Hide number input spinners */
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+    </style>
+</head>
+<body class="text-slate-800 min-h-screen p-4 md:p-6 lg:p-8 relative">
+
+    <div class="max-w-7xl mx-auto space-y-8">
+        
+        <!-- Header -->
+        <header class="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold text-slate-900 flex items-center gap-3">
+                    <i data-lucide="radar" class="text-indigo-600 h-8 w-8"></i>
+                    Smart Attendance GPS
+                </h1>
+                <p class="text-slate-500 mt-2 font-medium">Semester: Aug 29, 2026 — Nov 29, 2026</p>
+            </div>
+            <div class="flex items-center gap-3 bg-slate-100 px-4 py-2 rounded-xl border border-slate-200">
+                <i data-lucide="calendar" class="h-5 w-5 text-slate-500"></i>
+                <span class="text-sm font-semibold text-slate-700">Today: Sept 28, 2026</span>
+            </div>
+        </header>
+
+        <!-- Setup Section -->
+        <section id="setup-section" class="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-slate-200 transition-all duration-300">
+            <div class="max-w-2xl mx-auto">
+                
+                <!-- Timetable Selection -->
+                <div>
+                    <h2 class="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <i data-lucide="users" class="h-5 w-5 text-indigo-500"></i>
+                        Select Class Section
+                    </h2>
+                    
+                    <!-- Selection Area -->
+                    <div id="selection-box" class="border-2 border-slate-300 rounded-2xl p-8 text-center bg-slate-50 transition-colors">
+                        <label for="class-section" class="block text-base font-bold text-slate-700 mb-3">Choose your section from the timetable database:</label>
+                        <select id="class-section" class="w-full max-w-md mx-auto block bg-white border-2 border-slate-200 rounded-xl py-3 px-4 text-base font-bold text-slate-800 focus:ring-0 focus:border-indigo-500 outline-none transition-colors cursor-pointer appearance-none text-center">
+                            <option value="">-- Select Section --</option>
+                            <!-- Options populated by JS -->
+                        </select>
+                        <div id="upload-processing" class="hidden flex-col items-center justify-center py-4 mt-2">
+                            <i data-lucide="loader" class="h-8 w-8 text-indigo-600 spin mb-3 mx-auto"></i>
+                            <p class="text-base font-bold text-indigo-700">Loading Subject Data...</p>
+                        </div>
+                    </div>
+
+                    <!-- Uploaded State -->
+                    <div id="uploaded-state" class="hidden bg-indigo-50 border-2 border-indigo-200 rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                        <div class="flex items-center gap-4">
+                            <div class="bg-white p-3 rounded-xl shadow-sm">
+                                <i data-lucide="book-open" class="h-6 w-6 text-indigo-600"></i>
+                            </div>
+                            <div>
+                                <p id="filename-display" class="font-bold text-indigo-900 text-lg">Section Name</p>
+                                <p id="subject-count" class="text-sm text-indigo-600 font-medium">Successfully loaded subjects</p>
+                            </div>
+                        </div>
+                        <button id="btn-delete-tt" class="flex items-center gap-2 text-red-600 bg-red-100 hover:bg-red-200 px-4 py-2.5 rounded-xl transition-colors font-bold text-sm w-full md:w-auto justify-center" title="Reset Data & Select New Section">
+                            <i data-lucide="refresh-cw" class="h-4 w-4"></i>
+                            Change Section
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Dashboard / Subject View -->
+        <section id="dashboard-section" class="hidden space-y-6">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-2">
+                <h2 class="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                    <i data-lucide="layout-grid" class="h-6 w-6 text-indigo-600"></i>
+                    Subject-Wise Analytics
+                </h2>
+                <p class="text-sm text-slate-500 font-medium">Enter your current attendance to predict outcomes.</p>
+            </div>
+
+            <!-- Overall Attendance Health Chart -->
+            <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mb-6 flex flex-col md:flex-row items-center gap-6">
+                <div class="w-full md:w-1/3 flex justify-center">
+                    <div class="relative h-40 w-40">
+                        <canvas id="healthChart"></canvas>
+                        <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <span id="center-percentage-text" class="text-2xl font-black text-slate-800"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="w-full md:w-2/3">
+                    <h3 class="text-xl font-bold text-slate-800 mb-2 flex items-center gap-2">
+                        <i data-lucide="pie-chart" class="h-5 w-5 text-indigo-500"></i> Overall Attendance Health
+                    </h3>
+                    <p class="text-slate-500 mb-4 text-sm">This chart aggregates your current simulated attendance across all subjects to show your overall trajectory. Start entering your percentages below to see live updates!</p>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-emerald-50 p-4 rounded-xl border border-emerald-100">
+                            <p class="text-emerald-800 font-bold text-2xl" id="overall-safe">0</p>
+                            <p class="text-emerald-600 text-xs uppercase font-bold mt-1">Safe Subjects (≥75%)</p>
+                        </div>
+                        <div class="bg-red-50 p-4 rounded-xl border border-red-100">
+                            <p class="text-red-800 font-bold text-2xl" id="overall-risk">0</p>
+                            <p class="text-red-600 text-xs uppercase font-bold mt-1">At Risk (<75%)</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Grid for dynamically injected subject cards -->
+            <div id="subjects-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <!-- Cards injected via JS -->
+            </div>
+        </section>
+
+    </div>
+
+    <!-- Attendance Advisor Chatbot UI -->
+    <button id="chatbot-toggle" class="fixed bottom-6 right-6 bg-indigo-600 hover:bg-indigo-700 text-white p-4 rounded-full shadow-2xl transition-transform hover:scale-105 z-50 flex items-center justify-center group" title="Ask AI Advisor">
+        <i data-lucide="bot" class="h-7 w-7 group-hover:animate-bounce"></i>
+    </button>
+
+    <div id="chatbot-panel" class="fixed bottom-24 right-6 w-80 md:w-96 bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden hidden flex-col z-50 transition-all duration-300 transform scale-95 opacity-0">
+        <div class="bg-indigo-600 p-4 flex justify-between items-center text-white">
+            <div class="flex items-center gap-2">
+                <i data-lucide="sparkles" class="h-5 w-5"></i>
+                <h3 class="font-bold">Attendance Advisor</h3>
+            </div>
+            <button id="chatbot-close" class="text-white hover:text-indigo-200 transition-colors">
+                <i data-lucide="x" class="h-5 w-5"></i>
+            </button>
+        </div>
+        <div id="chatbot-messages" class="p-4 h-64 overflow-y-auto bg-slate-50 flex flex-col gap-3 text-sm">
+            <div class="bg-white p-3 rounded-2xl rounded-tl-none border border-slate-200 text-slate-700 self-start shadow-sm">
+                Hi there! 👋 I'm your AI Attendance Advisor. I can analyze your dashboard data instantly.<br><br>Try asking: <b>"If I take a 3-day sick leave starting tomorrow, will my Chemistry attendance drop below 75%?"</b>
+            </div>
+        </div>
+        <div class="p-3 border-t border-slate-200 bg-white">
+            <form id="chatbot-form" class="flex gap-2 relative">
+                <input type="text" id="chatbot-input" placeholder="Ask a natural question..." class="w-full bg-slate-100 border border-slate-200 rounded-full py-2.5 pl-4 pr-12 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow" autocomplete="off">
+                <button type="submit" class="absolute right-1.5 top-1.5 bg-indigo-600 text-white p-1.5 rounded-full hover:bg-indigo-700 transition-colors">
+                    <i data-lucide="send" class="h-4 w-4"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Icons
+        lucide.createIcons();
+
+        // --- HARDCODED TIMETABLE DATA FROM PDFS ---
+        const TIMETABLE_DATA = {
+            "I ECE-A": ["German", "Philosophy of Engineering", "Advanced Calculus and Complex Analysis", "Chemistry", "Electronic System and PCB Design", "Programming for Problem Solving", "Basic Civil and Mechanical Workshop", "General Aptitude", "NSS", "Biology"],
+            "I ECE-B & EEE": ["German", "Philosophy of Engineering", "Advanced Calculus and Complex Analysis", "Chemistry", "Electronic System and PCB Design", "Programming for Problem Solving", "Basic Civil and Mechanical Workshop", "General Aptitude", "NSS", "Biology", "Electrical Circuits"],
+            "I ECE-DS": ["German", "Philosophy of Engineering", "Advanced Calculus and Complex Analysis", "Chemistry", "Electronic System and PCB Design", "Programming for Problem Solving", "Basic Civil and Mechanical Workshop", "General Aptitude", "NSS", "Biology"],
+            "I Biotech-B / Biomed. Engg.": ["Japanese", "Philosophy of Engineering", "Advanced Calculus and Complex Analysis", "Chemistry", "Programming for Problem Solving", "Cell biology (for Biotech)", "Basic Civil and Mechanical Workshop", "General Aptitude", "Physical and Mental Health using Yoga", "Biochemistry (for Biotech)", "Biology: Human physiology and anatomy (for BME)"],
+            "II BME": ["Transforms and Boundary Value Problems", "Biomedical Signals and Systems", "Electric and Electronic Circuits", "Digital Logic for Medical Systems", "Medical Physics", "Professional Ethics", "Universal Human Values-II", "Verbal Reasoning", "Social Engineering"],
+            "II ECE-DS A": ["Transforms and Boundary Value Problems", "Solid State Devices", "Computer Organization and Architecture", "Digital Logic Design", "Electromagnetic Theory and Interference", "Professional Ethics", "Universal Human Values-II", "Verbal Reasoning", "Social Engineering", "Devices and Digital IC Laboratory"],
+            "II ECE-DS B": ["Transforms and Boundary Value Problems", "Solid State Devices", "Computer Organization and Architecture", "Digital Logic Design", "Electromagnetic Theory and Interference", "Professional Ethics", "Universal Human Values-II", "Verbal Reasoning", "Social Engineering", "Devices and Digital IC Laboratory"],
+            "III BME": ["Probability and Statistics", "Microcontrollers and Its Application in Medicine", "Biomedical Signal Processing", "Biometrics", "Modern wireless communication system", "Principles of Medical Imaging", "Analytical and Logical Thinking Skills", "Indian Art Form", "Community Connect"],
+            "III ECE-A": ["Discrete Mathematics", "Microprocessor, Microcontroller, and Interfacing Techniques", "VLSI Design and Technology", "System and Network on Chip", "Machine learning for all", "Community connect", "Analytical and logical thinking skills", "Indian Art Form", "VLSI Design/ Microprocessor Laboratory"],
+            "III ECE-B": ["Discrete Mathematics", "Microprocessor, Microcontroller, and Interfacing Techniques", "VLSI Design and Technology", "System and Network on Chip", "Machine learning for all", "Community connect", "Analytical and logical thinking skills", "Indian Art Form", "VLSI Design/ Microprocessor Laboratory"],
+            "III ECE-DS": ["Discrete Mathematics", "Microprocessor, Microcontroller, and Interfacing Techniques", "VLSI Design and Technology", "Machine learning for all", "Database Design and Management", "Community connect", "Analytical and logical thinking skills", "Indian Art Form", "VLSI Design/ Microprocessor Laboratory"],
+            "IV ECE-A": ["Behavioural Psychology", "Wireless Communication and Antenna Systems", "Computer Communication and Network Security", "Semiconductor Memory Design", "Scripting Language for Electronic Design Automation", "Machine learning for all", "Computer Communication and Network Security LAB"],
+            "IV ECE-B": ["Behavioural Psychology", "Wireless Communication and Antenna Systems", "Computer Communication and Network Security", "Semiconductor Memory Design", "Scripting Language for Electronic Design Automation", "Machine learning for all", "Computer Communication and Network Security LAB"]
+        };
+
+        // --- DOM ELEMENTS ---
+        const selectionBox = document.getElementById('selection-box');
+        const sectionSelect = document.getElementById('class-section');
+        const uploadProcessing = document.getElementById('upload-processing');
+        const uploadedState = document.getElementById('uploaded-state');
+        const filenameDisplay = document.getElementById('filename-display');
+        const subjectCountDisplay = document.getElementById('subject-count');
+        const btnDeleteTt = document.getElementById('btn-delete-tt');
+        const dashboardSection = document.getElementById('dashboard-section');
+        const subjectsGrid = document.getElementById('subjects-grid');
+
+        // --- STATE ---
+        let activeSubjects = [];
+        let healthChartInstance = null;
+
+        // --- SETUP LOGIC ---
+        
+        // Populate the dropdown with options from the PDF data
+        for (const section in TIMETABLE_DATA) {
+            const option = document.createElement('option');
+            option.value = section;
+            option.textContent = section;
+            sectionSelect.appendChild(option);
+        }
+
+        // Handle section selection
+        sectionSelect.addEventListener('change', (e) => {
+            const selectedSection = e.target.value;
+            if (!selectedSection) return;
+
+            // Show processing state
+            sectionSelect.style.display = 'none';
+            sectionSelect.previousElementSibling.style.display = 'none';
+            uploadProcessing.classList.remove('hidden');
+
+            // Simulate data loading delay
+            setTimeout(() => {
+                filenameDisplay.textContent = selectedSection;
+                subjectCountDisplay.textContent = `Successfully loaded ${TIMETABLE_DATA[selectedSection].length} subjects`;
+                
+                selectionBox.classList.add('hidden');
+                uploadProcessing.classList.add('hidden');
+                uploadedState.classList.remove('hidden');
+                
+                // Initialize Dashboard with selected data
+                initializeDashboard(selectedSection);
+            }, 800);
+        });
+
+        btnDeleteTt.addEventListener('click', () => {
+            // Reset UI
+            sectionSelect.value = '';
+            sectionSelect.style.display = 'block';
+            sectionSelect.previousElementSibling.style.display = 'block';
+            uploadedState.classList.add('hidden');
+            selectionBox.classList.remove('hidden');
+            dashboardSection.classList.add('hidden');
+            
+            // Clear Data
+            activeSubjects = [];
+            subjectsGrid.innerHTML = '';
+            if (healthChartInstance) {
+                healthChartInstance.destroy();
+                healthChartInstance = null;
+            }
+        });
+
+        // --- DASHBOARD & MATH LOGIC ---
+
+        function initializeDashboard(sectionName) {
+            // Map the string array into the object format the app expects
+            activeSubjects = TIMETABLE_DATA[sectionName].map((subjectName, index) => {
+                return {
+                    id: `sub${index + 1}`,
+                    name: subjectName,
+                    // Mock attendance stats to demonstrate the math logic as requested
+                    occurred: Math.floor(Math.random() * 10) + 12, // Random 12-21 occurred
+                    remaining: Math.floor(Math.random() * 15) + 25 // Random 25-39 remaining
+                };
+            });
+            
+            dashboardSection.classList.remove('hidden');
+            renderSubjects();
+            updateOverallHealth();
+        }
+
+        function renderSubjects() {
+            subjectsGrid.innerHTML = '';
+            
+            activeSubjects.forEach((subject, index) => {
+                const total = subject.occurred + subject.remaining;
+                
+                // HTML Template for a Subject Card
+                const cardHTML = `
+                    <div class="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col h-full relative">
+                        
+                        <!-- Card Header -->
+                        <div class="bg-slate-50 p-5 border-b border-slate-100">
+                            <h3 class="font-extrabold text-slate-800 text-lg leading-tight">${subject.name}</h3>
+                            <div class="flex gap-4 mt-3 text-sm">
+                                <div class="flex flex-col">
+                                    <span class="text-slate-500 font-semibold text-xs uppercase">Conducted</span>
+                                    <span class="font-bold text-slate-700">${subject.occurred}</span>
+                                </div>
+                                <div class="w-px bg-slate-300"></div>
+                                <div class="flex flex-col">
+                                    <span class="text-slate-500 font-semibold text-xs uppercase">Remaining</span>
+                                    <span class="font-bold text-indigo-600">${subject.remaining}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- User Input Area & OD Simulator -->
+                        <div class="p-5 border-b border-slate-100 bg-white space-y-4">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 uppercase mb-2">Current Attendance %</label>
+                                <div class="relative">
+                                    <input type="number" 
+                                        id="input-${index}" 
+                                        min="0" max="100" 
+                                        placeholder="e.g. 65"
+                                        class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl py-2 px-3 text-lg font-black text-slate-800 focus:ring-0 focus:border-indigo-500 outline-none transition-colors"
+                                    >
+                                    <span class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-black text-lg">%</span>
+                                </div>
+                            </div>
+                            
+                            <!-- OD / Medical Leave Simulator Feature -->
+                            <div class="pt-2 border-t border-slate-100">
+                                <label class="block text-xs font-bold text-indigo-600 uppercase mb-2 flex items-center gap-1.5">
+                                    <i data-lucide="shield-plus" class="w-3.5 h-3.5"></i> Add OD / Med Leave (Classes)
+                                </label>
+                                <input type="number" 
+                                    id="od-${index}" 
+                                    min="0" 
+                                    placeholder="Simulate approved leave..."
+                                    class="w-full bg-indigo-50 border border-indigo-200 rounded-xl py-2 px-3 text-sm font-semibold text-indigo-900 focus:ring-0 focus:border-indigo-500 outline-none transition-colors"
+                                >
+                            </div>
+                        </div>
+
+                        <!-- Results Container (Dynamic) -->
+                        <div id="results-${index}" class="p-5 flex-grow flex flex-col justify-center bg-slate-50/50">
+                            <div class="text-center text-slate-400 font-medium text-sm">
+                                <i data-lucide="activity" class="h-6 w-6 mx-auto mb-2 opacity-50"></i>
+                                Enter percentage to view predictions
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // Append card
+                subjectsGrid.insertAdjacentHTML('beforeend', cardHTML);
+                
+                // Add Event Listeners
+                const inputEl = document.getElementById(`input-${index}`);
+                const odEl = document.getElementById(`od-${index}`);
+                
+                inputEl.addEventListener('input', () => { calculatePredictions(index, inputEl.value); });
+                odEl.addEventListener('input', () => { calculatePredictions(index, inputEl.value); });
+            });
+            
+            lucide.createIcons();
+        }
+
+        function calculatePredictions(index, currentPctStr) {
+            const resultsContainer = document.getElementById(`results-${index}`);
+            const subject = activeSubjects[index];
+            const pct = parseFloat(currentPctStr);
+            
+            const odInput = document.getElementById(`od-${index}`);
+            const odClasses = parseInt(odInput.value) || 0;
+            
+            // Handle empty or invalid input
+            if (isNaN(pct) || pct < 0 || pct > 100) {
+                resultsContainer.innerHTML = `
+                    <div class="text-center text-slate-400 font-medium text-sm">
+                        <i data-lucide="help-circle" class="h-6 w-6 mx-auto mb-2 opacity-50"></i>
+                        Please enter a valid percentage (0-100)
+                    </div>
+                `;
+                lucide.createIcons();
+                updateOverallHealth();
+                return;
+            }
+
+            // Math execution
+            const total = subject.occurred + subject.remaining;
+            
+            // Calculate strictly attended classes based on current percentage of occurred classes
+            let baseAttended = Math.round((subject.occurred * pct) / 100); 
+            
+            // Simulator Math: Add approved OD / Med Leave to attended pool, capped by occurred classes
+            let classesAttended = baseAttended + odClasses;
+            if (classesAttended > subject.occurred) classesAttended = subject.occurred;
+            
+            // Max possible scenario: They attend EVERY remaining class
+            const maxPossibleAttendance = classesAttended + subject.remaining;
+            const maxPossiblePct = (maxPossibleAttendance / total) * 100;
+
+            // --- CONDITION 1: IRREVERSIBLE DETENTION (< 75% max possible) ---
+            if (maxPossiblePct < 75) {
+                resultsContainer.innerHTML = `
+                    <div class="alert-irreversible text-white p-4 rounded-2xl h-full flex flex-col justify-center items-center text-center shadow-inner">
+                        <i data-lucide="skull" class="h-8 w-8 mb-2 opacity-90"></i>
+                        <h4 class="font-black text-lg tracking-wide uppercase mb-1 drop-shadow-md">Irreversible</h4>
+                        <p class="text-sm font-semibold opacity-90">Max possible: ${maxPossiblePct.toFixed(1)}%</p>
+                        <p class="text-xs opacity-75 mt-2 px-2">Even attending all ${subject.remaining} remaining classes won't save you.</p>
+                    </div>
+                `;
+                lucide.createIcons();
+                updateOverallHealth();
+                return;
+            }
+
+            // --- CONDITION 2: RECOVERABLE OR SAFE (>= 75%) ---
+            
+            // Calculate exactly how many they need for 75%
+            const required75 = Math.ceil(0.75 * total);
+            const classesNeeded75 = required75 - classesAttended;
+            
+            // Calculate exactly how many they need for 90%
+            const required90 = Math.ceil(0.90 * total);
+            const classesNeeded90 = required90 - classesAttended;
+
+            // UI Building for 75% Target
+            let html75 = '';
+            if (classesNeeded75 > 0) {
+                // Needs to attend classes to secure 75%
+                html75 = `
+                    <div class="bg-amber-100 border border-amber-300 rounded-xl p-3 mb-3">
+                        <div class="flex items-start gap-2">
+                            <i data-lucide="alert-triangle" class="h-5 w-5 text-amber-600 mt-0.5 shrink-0"></i>
+                            <div>
+                                <p class="text-sm font-bold text-amber-900">75% Target</p>
+                                <p class="text-xs font-semibold text-amber-700 mt-0.5">
+                                    Attend <span class="text-amber-900 font-black text-base px-1">${classesNeeded75}</span> of ${subject.remaining} remaining.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Already above 75% even if they miss some
+                const safeSkips = Math.abs(classesNeeded75);
+                html75 = `
+                    <div class="bg-emerald-100 border border-emerald-300 rounded-xl p-3 mb-3">
+                        <div class="flex items-start gap-2">
+                            <i data-lucide="check-circle" class="h-5 w-5 text-emerald-600 mt-0.5 shrink-0"></i>
+                            <div>
+                                <p class="text-sm font-bold text-emerald-900">75% Secured</p>
+                                <p class="text-xs font-semibold text-emerald-700 mt-0.5">
+                                    You can safely miss <span class="font-black">${safeSkips}</span> classes.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // UI Building for 90% Target
+            let html90 = '';
+            if (maxPossiblePct < 90) {
+                // Cannot reach 90%
+                html90 = `
+                    <div class="bg-slate-200 border border-slate-300 rounded-xl p-3 opacity-70">
+                        <div class="flex items-start gap-2">
+                            <i data-lucide="x-circle" class="h-5 w-5 text-slate-500 mt-0.5 shrink-0"></i>
+                            <div>
+                                <p class="text-sm font-bold text-slate-700">90% Excellence</p>
+                                <p class="text-xs font-semibold text-slate-600 mt-0.5">Target mathematically unreachable.</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else if (classesNeeded90 > 0) {
+                // Can reach 90%, needs effort
+                html90 = `
+                    <div class="bg-blue-100 border border-blue-300 rounded-xl p-3">
+                        <div class="flex items-start gap-2">
+                            <i data-lucide="trending-up" class="h-5 w-5 text-blue-600 mt-0.5 shrink-0"></i>
+                            <div>
+                                <p class="text-sm font-bold text-blue-900">90% Excellence</p>
+                                <p class="text-xs font-semibold text-blue-700 mt-0.5">
+                                    Attend <span class="text-blue-900 font-black text-base px-1">${classesNeeded90}</span> more to hit 90%.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Already above 90%
+                const safeSkips90 = Math.abs(classesNeeded90);
+                html90 = `
+                    <div class="bg-indigo-100 border border-indigo-300 rounded-xl p-3 flex items-start gap-2">
+                        <i data-lucide="award" class="h-5 w-5 text-indigo-600 mt-0.5 shrink-0"></i>
+                        <div>
+                            <p class="text-sm font-bold text-indigo-900">90% Excellence</p>
+                            <p class="text-xs font-semibold text-indigo-700 mt-0.5">Secured! Buffer: <span class="font-black">${safeSkips90}</span> classes.</p>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Inject final html
+            resultsContainer.innerHTML = `<div class="flex flex-col h-full justify-start">${html75}${html90}</div>`;
+            lucide.createIcons();
+            
+            // Trigger Overall Health Chart Update
+            updateOverallHealth();
+        }
+
+        // Overall Health Chart Logic
+        function updateOverallHealth() {
+            if (!activeSubjects || activeSubjects.length === 0) return;
+            
+            let safeCount = 0;
+            let riskCount = 0;
+            let totalAttended = 0;
+            let totalOccurred = 0;
+            let inputsFilled = false;
+
+            activeSubjects.forEach((sub, index) => {
+                const pctInput = document.getElementById(`input-${index}`);
+                const odInput = document.getElementById(`od-${index}`);
+                
+                if (pctInput && pctInput.value !== '') {
+                    inputsFilled = true;
+                    const pct = parseFloat(pctInput.value) || 0;
+                    const od = parseInt(odInput.value) || 0;
+                    
+                    let attended = Math.round((sub.occurred * pct) / 100) + od;
+                    if (attended > sub.occurred) attended = sub.occurred;
+                    
+                    totalAttended += attended;
+                    totalOccurred += sub.occurred;
+                    
+                    const currentEffectivePct = (attended / sub.occurred) * 100;
+                    if (currentEffectivePct >= 75) {
+                        safeCount++;
+                    } else {
+                        riskCount++;
+                    }
+                }
+            });
+
+            document.getElementById('overall-safe').textContent = safeCount;
+            document.getElementById('overall-risk').textContent = riskCount;
+
+            const overallPct = (totalOccurred > 0) ? ((totalAttended / totalOccurred) * 100).toFixed(1) : (inputsFilled ? 0 : 100);
+            const remainder = (100 - overallPct).toFixed(1);
+
+            document.getElementById('center-percentage-text').textContent = overallPct + '%';
+
+            const ctx = document.getElementById('healthChart').getContext('2d');
+            
+            if (healthChartInstance) {
+                healthChartInstance.data.datasets[0].data = [overallPct, remainder];
+                healthChartInstance.update();
+            } else {
+                healthChartInstance = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Overall Attended %', 'Overall Missed %'],
+                        datasets: [{
+                            data: [overallPct, remainder],
+                            backgroundColor: ['#4f46e5', '#e2e8f0'],
+                            borderWidth: 0,
+                            cutout: '75%',
+                            borderRadius: 10
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) { return context.label + ': ' + context.raw + '%'; }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        // --- ATTENDANCE ADVISOR CHATBOT LOGIC ---
+        const chatbotToggle = document.getElementById('chatbot-toggle');
+        const chatbotPanel = document.getElementById('chatbot-panel');
+        const chatbotClose = document.getElementById('chatbot-close');
+        const chatbotForm = document.getElementById('chatbot-form');
+        const chatbotInput = document.getElementById('chatbot-input');
+        const chatbotMessages = document.getElementById('chatbot-messages');
+
+        chatbotToggle.addEventListener('click', () => {
+            chatbotPanel.classList.remove('hidden');
+            setTimeout(() => {
+                chatbotPanel.classList.remove('scale-95', 'opacity-0');
+                chatbotPanel.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        });
+
+        chatbotClose.addEventListener('click', () => {
+            chatbotPanel.classList.remove('scale-100', 'opacity-100');
+            chatbotPanel.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => { chatbotPanel.classList.add('hidden'); }, 300);
+        });
+
+        chatbotForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const msg = chatbotInput.value.trim();
+            if(!msg) return;
+            
+            appendChatMessage(msg, 'user');
+            chatbotInput.value = '';
+
+            // Simulate AI reading dashboard data and typing delay
+            setTimeout(() => {
+                const response = processAdvisorLogic(msg);
+                appendChatMessage(response, 'ai');
+            }, 600);
+        });
+
+        function appendChatMessage(text, sender) {
+            const div = document.createElement('div');
+            if(sender === 'user') {
+                div.className = 'bg-indigo-600 text-white p-3 rounded-2xl rounded-tr-none self-end shadow-sm max-w-[85%]';
+            } else {
+                div.className = 'bg-white p-3 rounded-2xl rounded-tl-none border border-slate-200 text-slate-700 self-start shadow-sm max-w-[85%]';
+            }
+            div.innerHTML = text; // allow basic bolding/formatting in AI reply
+            chatbotMessages.appendChild(div);
+            chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
+        }
+
+        function processAdvisorLogic(query) {
+            if (activeSubjects.length === 0) {
+                return "Please select a Class Section first so I can access your timetable database!";
+            }
+
+            const lowerQuery = query.toLowerCase();
+            
+            // 1. Identify Subject
+            let targetSubject = null;
+            let targetIndex = -1;
+            for (let i = 0; i < activeSubjects.length; i++) {
+                const subName = activeSubjects[i].name.toLowerCase();
+                // Match either full name or the first prominent word (e.g. "Chemistry")
+                if (lowerQuery.includes(subName) || lowerQuery.includes(subName.split(' ')[0])) {
+                    targetSubject = activeSubjects[i];
+                    targetIndex = i;
+                    break;
+                }
+            }
+
+            if (!targetSubject) {
+                return "I couldn't identify a specific subject in your question. Could you name the exact subject from your dashboard? (e.g., 'Chemistry')";
+            }
+
+            // 2. Read Current Dashboard Data for that subject
+            const inputEl = document.getElementById(`input-${targetIndex}`);
+            if(!inputEl || !inputEl.value) {
+                return `Before I can run simulations, please enter your current attendance percentage for <b>${targetSubject.name}</b> in the dashboard!`;
+            }
+
+            const pct = parseFloat(inputEl.value);
+            const odInput = document.getElementById(`od-${targetIndex}`);
+            const odClasses = odInput ? (parseInt(odInput.value) || 0) : 0;
+
+            let currentAttended = Math.round((targetSubject.occurred * pct) / 100) + odClasses;
+            if (currentAttended > targetSubject.occurred) currentAttended = targetSubject.occurred;
+            
+            const totalClasses = targetSubject.occurred + targetSubject.remaining;
+
+            // 3. Extract numbers related to "days", "leave", "sick", "classes"
+            const numberMatch = lowerQuery.match(/(\d+)\s*(-?day|class|leave|sick)/);
+            const classesToMiss = numberMatch ? parseInt(numberMatch[1]) : 0;
+
+            if (classesToMiss > 0) {
+                // Simulate dropping classes from the "remaining" pool
+                const newRemaining = targetSubject.remaining - classesToMiss;
+                
+                if (newRemaining < 0) {
+                    return `You only have ${targetSubject.remaining} classes remaining in ${targetSubject.name}. Missing ${classesToMiss} classes isn't possible!`;
+                }
+                
+                const newMaxPossible = currentAttended + newRemaining;
+                const newMaxPct = (newMaxPossible / totalClasses) * 100;
+                
+                if (newMaxPct < 75) {
+                    return `🚨 <b>Warning!</b> If you take a ${classesToMiss}-day leave, your maximum possible attendance for ${targetSubject.name} will drop to <b>${newMaxPct.toFixed(1)}%</b>, which is below the 75% baseline. <b>I strongly advise against this!</b>`;
+                } else if (newMaxPct < 80) {
+                    return `⚠️ You can take ${classesToMiss} days off, but it's risky. Your max possible attendance would drop to <b>${newMaxPct.toFixed(1)}%</b>. Proceed with caution.`;
+                } else {
+                    return `✅ <b>You're safe!</b> Even if you miss ${classesToMiss} classes, your maximum possible attendance will be <b>${newMaxPct.toFixed(1)}%</b>, keeping you comfortably above the 75% threshold.`;
+                }
+            }
+            
+            // Fallback status check if no specific leave amount was found
+            const maxPos = ((currentAttended + targetSubject.remaining) / totalClasses) * 100;
+            return `I've analyzed your data for <b>${targetSubject.name}</b>. You've attended approximately ${currentAttended} out of ${targetSubject.occurred} conducted classes. Your maximum possible outcome right now is ${maxPos.toFixed(1)}%. Let me know if you want to simulate taking a leave!`;
+        }
+    </script>
+</body>
+</html>
